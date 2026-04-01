@@ -203,15 +203,15 @@ def create_hole(batch):
     return batch * mask.float()
 
 
-MODEL_NAME = "thegrassisgreen_full"
+MODEL_NAME = "biggish"
 CHANNELS = 16
-IMG_WIDTH = 150
-IMG_HEIGHT = 16
-IMG_PATH = "images/text/thegrassisgreen_full.png"
-EPOCHS = 20000
+IMG_WIDTH = 60
+IMG_HEIGHT = 90
+IMG_PATH = "images/big.jpg"
+EPOCHS = 12000
 BATCH_SIZE = 8
 
-LR = 2e-3
+LR = 2e-4
 LR_GAMMA = 0.9999
 BETAS = (0.5, 0.5)
 
@@ -272,6 +272,7 @@ if __name__ == "__main__":
             if i % 100 == 0:
                 tqdm.write(f"epoch {curr_epoch} loss: {loss.item()}")
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(cann.parameters(), max_norm=1.0)
             optimizer.step()
             scheduler.step()
     except KeyboardInterrupt:
