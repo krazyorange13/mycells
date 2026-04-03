@@ -13,7 +13,7 @@ from main import (
     IMG_HEIGHT,
 )
 
-MODEL_NAME = "biggish-12000"
+MODEL_NAME = "biggish2-29000"
 MODEL_PATH = f"models/{MODEL_NAME}.tar"
 ANIM_PREFIX = MODEL_NAME
 

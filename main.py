@@ -10,11 +10,11 @@ from tqdm import tqdm
 torch._logging.set_logs(graph_code=True, recompiles=True)  # type: ignore
 
 
-class SobelFilter(nn.Module):
+class PerceptionFilter(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels = in_channels
-        self.out_channels = in_channels * 3
+        self.out_channels = in_channels * 4
         self.conv = nn.Conv2d(
             self.in_channels,
             self.out_channels,
@@ -22,7 +22,7 @@ class SobelFilter(nn.Module):
             padding=1,
             groups=in_channels,
             bias=False,
-            padding_mode="circular",
+            # padding_mode="circular",
         )
         self.reset_params()
 
@@ -30,7 +30,8 @@ class SobelFilter(nn.Module):
         identity = torch.tensor([[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
         sobel_x = torch.tensor([[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]])
         sobel_y = sobel_x.T
-        kernel = torch.stack([identity, sobel_x, sobel_y])[:, None, :, :]
+        laplacian = torch.tensor([[1.0, 1.0, 1.0], [1.0, -8.0, 1.0], [1.0, 1.0, 1.0]])
+        kernel = torch.stack([identity, sobel_x, sobel_y, laplacian])[:, None, :, :]
         with torch.no_grad():
             self.conv.weight.copy_(kernel.repeat(self.in_channels, 1, 1, 1))
 
@@ -43,11 +44,11 @@ class CANN(nn.Module):
         super(CANN, self).__init__()
         self.update_rate = update_rate
 
-        self.perception = SobelFilter(CHANNELS)
+        self.perception = PerceptionFilter(CHANNELS)
         self.perception.conv.weight.requires_grad = False
 
         self.seq = nn.Sequential(
-            nn.Conv2d(CHANNELS * 3, 64, kernel_size=1),
+            nn.Conv2d(CHANNELS * 4, 64, kernel_size=1),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=1),
             nn.ReLU(),
@@ -81,9 +82,9 @@ class CANN(nn.Module):
         return update_mask
 
     def get_alive_mask(self, x, threshold=0.1):
-        x = F.pad(x, (1, 1, 1, 1), mode="circular")
+        # x = F.pad(x, (1, 1, 1, 1), mode="circular")
         alpha = x[:, 3:4, :, :]
-        mask = F.max_pool2d(alpha, kernel_size=3, stride=1, padding=0) > threshold
+        mask = F.max_pool2d(alpha, kernel_size=3, stride=1, padding=1) > threshold
         return mask.float()
 
     def forward(self, x, steps=1, update_rate=None):
@@ -203,17 +204,18 @@ def create_hole(batch):
     return batch * mask.float()
 
 
-MODEL_NAME = "biggish"
+MODEL_NAME = "biggish2"
 CHANNELS = 16
 IMG_WIDTH = 60
 IMG_HEIGHT = 90
 IMG_PATH = "images/big.jpg"
-EPOCHS = 12000
+EPOCHS = 7000
 BATCH_SIZE = 8
 
-LR = 2e-4
+LR = 2e-3  # 2e-4
 LR_GAMMA = 0.9999
-BETAS = (0.5, 0.5)
+# BETAS = (0.5, 0.5)
+BETAS = (0.9, 0.9999)
 
 if __name__ == "__main__":
     cann = CANN()
@@ -264,7 +266,7 @@ if __name__ == "__main__":
         for i in tqdm(range(EPOCHS), leave=False):
             curr_epoch = i + loaded_epoch
             optimizer.zero_grad()
-            steps = torch.randint(64, 96, (1,)).item()
+            steps = torch.randint(160, 192, (1,)).item()
             model_in = pool.sample_damaged(BATCH_SIZE)
             res = cann(model_in, steps=steps)
             loss = F.mse_loss(res[:, :4], target)
